@@ -67,6 +67,10 @@ jobs:
           java-version: "21"
 
       - uses: android-actions/setup-android@v3
+        with:
+          # cmdline-tools no longer publishes the legacy "tools" package.
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
 
       - name: Install NDK and host build tools
         run: |
@@ -109,6 +113,9 @@ jobs:
           java-version: "21"
 
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
 
       - name: Install Android SDK
         run: |
