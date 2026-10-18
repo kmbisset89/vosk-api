@@ -92,7 +92,9 @@ cd $WORKDIR
 if [ ! -d OpenBLAS/.git ]; then
     git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
 fi
-make -C OpenBLAS TARGET=$BLAS_ARCH ONLY_CBLAS=1 AR=$AR CC=$CC HOSTCC=gcc ARM_SOFTFP_ABI=1 USE_THREAD=0 NUM_THREADS=1 CCOMMON_OPT="$NOIMPLICIT" -j 8
+# Keep OpenBLAS' own CCOMMON_OPT. A command-line CCOMMON_OPT drops
+# -DMAX_PARALLEL_NUMBER and the version string.
+make -C OpenBLAS TARGET=$BLAS_ARCH ONLY_CBLAS=1 AR=$AR CC="$CC $NOIMPLICIT" HOSTCC=gcc ARM_SOFTFP_ABI=1 USE_THREAD=0 NUM_THREADS=1 -j 8
 make -C OpenBLAS install PREFIX=$WORKDIR/local
 
 # CLAPACK
