@@ -25,13 +25,18 @@ task buildVosk(type: Exec) {
 }
 
 dependencies {
-    api 'net.java.dev.jna:jna:5.18.1@aar'
+    api('net.java.dev.jna:jna:5.18.1') {
+        artifact {
+            type = 'aar'
+            extension = 'aar'
+        }
+    }
 }
 
 //preBuild.dependsOn buildVosk
 
 mavenPublishing {
-    coordinates("com.alphacephei", archiveName, version)
+    coordinates("io.github.kmbisset", archiveName, version)
     pom {
         name = pomName
         description = pomDescription

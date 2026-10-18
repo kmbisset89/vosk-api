@@ -12,6 +12,13 @@ gradle
 local.properties
 gradle.properties
 
+# The Android wrapper is the entry point for GitHub Actions.
+!android/gradlew
+!android/gradlew.bat
+!android/gradle/
+!android/gradle/wrapper/
+!android/gradle/wrapper/**
+
 # Android
 android/build
 android/lib/build

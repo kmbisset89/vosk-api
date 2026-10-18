@@ -17,25 +17,75 @@ android {
     }
     sourceSets {
         main {
-            assets.srcDirs += "$buildDir/generated/assets"
+            // Pack only the downloaded model. src/main/assets holds the same
+            // README, and the asset merger rejects that duplicate path.
+            assets.srcDirs = ["$buildDir/generated/assets"]
         }
     }
 }
 
-tasks.register('genUUID') {
-    def uuid = UUID.randomUUID().toString()
-    def odir = file("$buildDir/generated/assets/model-en-us")
-    def ofile = file("$odir/uuid")
+def modelName = "vosk-model-small-en-us-0.15"
+def modelUrl = "https://alphacephei.com/vosk/models/${modelName}.zip"
+
+tasks.register('prepareEnglishModel') {
+    def resolvedModelName = modelName
+    def resolvedModelUrl = modelUrl
+    def zipFile = file("$buildDir/downloads/${resolvedModelName}.zip")
+    def outputDir = file("$buildDir/generated/assets/model-en-us")
+    inputs.property("modelName", resolvedModelName)
+    outputs.dir(outputDir)
     doLast {
-        mkdir odir
-        ofile.text = uuid
+        zipFile.parentFile.mkdirs()
+        if (!zipFile.exists() || zipFile.length() == 0L) {
+            ant.get(src: resolvedModelUrl, dest: zipFile)
+        }
+
+        def extractRoot = file("$buildDir/downloads/${resolvedModelName}-extract")
+        if (extractRoot.exists()) {
+            extractRoot.deleteDir()
+        }
+        extractRoot.mkdirs()
+        copy {
+            from zipTree(zipFile)
+            into extractRoot
+        }
+
+        def modelRoot = extractRoot.listFiles()?.find { File dir ->
+            dir.isDirectory() && (
+                new File(dir, "am/final.mdl").isFile() ||
+                new File(dir, "final.mdl").isFile()
+            )
+        }
+        if (modelRoot == null) {
+            throw new GradleException("No Vosk model directory found in ${resolvedModelName}.zip")
+        }
+
+        def hasLookahead =
+            (new File(modelRoot, "HCLr.fst").isFile() || new File(modelRoot, "graph/HCLr.fst").isFile()) &&
+            (new File(modelRoot, "Gr.fst").isFile() || new File(modelRoot, "graph/Gr.fst").isFile())
+        if (!hasLookahead) {
+            throw new GradleException(
+                "${resolvedModelName} is not a lookahead model: HCLr.fst and Gr.fst are required for grammar commands"
+            )
+        }
+
+        if (outputDir.exists()) {
+            outputDir.deleteDir()
+        }
+        outputDir.mkdirs()
+        copy {
+            from modelRoot
+            into outputDir
+        }
+        // StorageService skips the asset copy when this uuid already matches on device.
+        new File(outputDir, "uuid").text = resolvedModelName + "\n"
     }
 }
 
-preBuild.dependsOn(genUUID)
+preBuild.dependsOn(prepareEnglishModel)
 
 mavenPublishing {
-    coordinates("com.alphacephei", archiveName, version)
+    coordinates("io.github.kmbisset", archiveName, version)
     pom {
         name = pomName
         description = pomDescription

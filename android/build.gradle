@@ -10,7 +10,7 @@ buildscript {
 }
 
 allprojects {
-    version = '0.3.75'
+    version = findProperty('VERSION_NAME') ?: '0.3.75'
 }
 
 subprojects {
@@ -30,7 +30,7 @@ subprojects {
 
     mavenPublishing {
         pom {
-            url = 'http://www.alphacephei.com.com/vosk/'
+            url = 'https://github.com/kmbisset89/vosk-api'
             licenses {
                 license {
                     name = 'The Apache License, Version 2.0'
@@ -39,14 +39,15 @@ subprojects {
             }
             developers {
                 developer {
-                    id = 'com.alphacephei'
-                    name = 'Alpha Cephei Inc'
-                    email = 'contact@alphacephei.com'
+                    id = 'kmbisset89'
+                    name = 'kmbisset89'
+                    email = '42785343+kmbisset89@users.noreply.github.com'
                 }
             }
             scm {
-                connection = 'scm:git:git://github.com/alphacep/vosk-api.git'
-                url = 'https://github.com/alphacep/vosk-api/'
+                connection = 'scm:git:git://github.com/kmbisset89/vosk-api.git'
+                developerConnection = 'scm:git:ssh://git@github.com/kmbisset89/vosk-api.git'
+                url = 'https://github.com/kmbisset89/vosk-api'
             }
         }
     }
