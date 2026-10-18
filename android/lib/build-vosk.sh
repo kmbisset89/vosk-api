@@ -24,6 +24,7 @@ if [ ! -d "$ANDROID_NDK_HOME" ]; then
     exit 1
 fi
 
+set -euo pipefail
 set -x
 
 OS_NAME=`echo $(uname -s) | tr '[:upper:]' '[:lower:]'`
@@ -31,8 +32,12 @@ ANDROID_TOOLCHAIN_PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/${OS_NAME}-x86
 WORKDIR_BASE=`pwd`/build
 PATH=$ANDROID_TOOLCHAIN_PATH/bin:$PATH
 OPENFST_VERSION=1.8.0
+# NDK clang 15+ rejects the implicit declarations OpenBLAS and CLAPACK still use.
+NOIMPLICIT="-Wno-implicit-function-declaration"
+# Space-separated ABIs. Default builds every Android ABI this script supports.
+ABIS="${VOSK_ANDROID_ABIS:-armeabi-v7a arm64-v8a x86_64 x86}"
 
-for arch in armeabi-v7a arm64-v8a x86_64 x86; do
+for arch in $ABIS; do
 
 WORKDIR=${WORKDIR_BASE}/kaldi_${arch}
 
@@ -84,15 +89,21 @@ mkdir -p $WORKDIR/local/lib
 
 # openblas first
 cd $WORKDIR
-git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
-make -C OpenBLAS TARGET=$BLAS_ARCH ONLY_CBLAS=1 AR=$AR CC=$CC HOSTCC=gcc ARM_SOFTFP_ABI=1 USE_THREAD=0 NUM_THREADS=1 -j 8
+if [ ! -d OpenBLAS/.git ]; then
+    git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
+fi
+# Keep OpenBLAS' own CCOMMON_OPT. A command-line CCOMMON_OPT drops
+# -DMAX_PARALLEL_NUMBER and the version string.
+make -C OpenBLAS TARGET=$BLAS_ARCH ONLY_CBLAS=1 AR=$AR CC="$CC $NOIMPLICIT" HOSTCC=gcc ARM_SOFTFP_ABI=1 USE_THREAD=0 NUM_THREADS=1 -j 8
 make -C OpenBLAS install PREFIX=$WORKDIR/local
 
 # CLAPACK
 cd $WORKDIR
-git clone -b v3.2.1  --single-branch https://github.com/alphacep/clapack
+if [ ! -d clapack/.git ]; then
+    git clone -b v3.2.1  --single-branch https://github.com/alphacep/clapack
+fi
 mkdir -p clapack/BUILD && cd clapack/BUILD
-cmake -DCMAKE_C_FLAGS="$ARCHFLAGS" -DCMAKE_C_COMPILER_TARGET=$HOST \
+cmake -DCMAKE_C_FLAGS="$ARCHFLAGS $NOIMPLICIT" -DCMAKE_C_COMPILER_TARGET=$HOST \
     -DCMAKE_C_COMPILER=$CC -DCMAKE_SYSTEM_NAME=Generic -DCMAKE_AR=$ANDROID_TOOLCHAIN_PATH/bin/$AR \
     -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
     -DCMAKE_CROSSCOMPILING=True ..
@@ -103,10 +114,12 @@ find . -name "*.a" | xargs cp -t $WORKDIR/local/lib
 
 # tools directory --> we'll only compile OpenFST
 cd $WORKDIR
-git clone https://github.com/alphacep/openfst
+if [ ! -d openfst/.git ]; then
+    git clone https://github.com/alphacep/openfst
+fi
 cd openfst
 autoreconf -i
-CXX=$CXX CXXFLAGS="$ARCHFLAGS -O3 -DFST_NO_DYNAMIC_LINKING" ./configure --prefix=${WORKDIR}/local \
+CXX=$CXX CXXFLAGS="$ARCHFLAGS -O3 -DFST_NO_DYNAMIC_LINKING $NOIMPLICIT" ./configure --prefix=${WORKDIR}/local \
     --enable-shared --enable-static --with-pic --disable-bin \
     --enable-lookahead-fsts --enable-ngram-fsts --host=$HOST --build=x86-linux-gnu
 make -j 8
@@ -114,9 +127,11 @@ make install
 
 # Kaldi itself
 cd $WORKDIR
-git clone -b vosk-android --single-branch https://github.com/alphacep/kaldi
+if [ ! -d kaldi/.git ]; then
+    git clone -b vosk-android --single-branch https://github.com/alphacep/kaldi
+fi
 cd $WORKDIR/kaldi/src
-CXX=$CXX AR=$AR RANLIB=$RANLIB CXXFLAGS="$ARCHFLAGS -O3 -DFST_NO_DYNAMIC_LINKING" ./configure --use-cuda=no \
+CXX=$CXX AR=$AR RANLIB=$RANLIB CXXFLAGS="$ARCHFLAGS -O3 -DFST_NO_DYNAMIC_LINKING $NOIMPLICIT" ./configure --use-cuda=no \
     --mathlib=OPENBLAS_CLAPACK --shared \
     --android-incdir=${ANDROID_TOOLCHAIN_PATH}/sysroot/usr/include \
     --host=$HOST --openblas-root=${WORKDIR}/local \
@@ -134,6 +149,7 @@ make -j 8 -C ${WORKDIR_BASE}/../../../src \
     OPENFST_ROOT=${WORKDIR}/local \
     OPENBLAS_ROOT=${WORKDIR}/local \
     CXX=$CXX \
+    EXTRA_CFLAGS="$NOIMPLICIT" \
     EXTRA_LDFLAGS="-llog -static-libstdc++ -Wl,-soname,libvosk.so ${PAGESIZE_LDFLAGS}"
 cp $WORKDIR/vosk/libvosk.so $WORKDIR/../../src/main/jniLibs/$arch/libvosk.so
 

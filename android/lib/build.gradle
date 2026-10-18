@@ -19,19 +19,32 @@ android {
     }
 }
 
-task buildVosk(type: Exec) {
+tasks.register('buildVosk', Exec) {
     commandLine './build-vosk.sh'
-    environment ANDROID_NDK_HOME: android.getNdkDirectory()
+    // Resolved at execution so configuring the project does not require an NDK
+    // when libvosk.so is already built.
+    doFirst {
+        def ndkHome = System.getenv('ANDROID_NDK_HOME')
+        if (!ndkHome) {
+            ndkHome = android.ndkDirectory.absolutePath
+        }
+        environment 'ANDROID_NDK_HOME', ndkHome
+    }
 }
 
 dependencies {
-    api 'net.java.dev.jna:jna:5.18.1@aar'
+    api('net.java.dev.jna:jna:5.18.1') {
+        artifact {
+            type = 'aar'
+            extension = 'aar'
+        }
+    }
 }
 
 //preBuild.dependsOn buildVosk
 
 mavenPublishing {
-    coordinates("com.alphacephei", archiveName, version)
+    coordinates("io.github.kmbisset", archiveName, version)
     pom {
         name = pomName
         description = pomDescription
